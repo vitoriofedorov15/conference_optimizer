@@ -1,23 +1,10 @@
-"""
-Модуль группировки конференций в серии.
-
-После нормализации конференции объединяются в серии по ключу series_key.
-Fuzzy-matching применяется только к ключам типа 'title' и 'name'
-(аббревиатуры сравниваются точно — они уже стандартизованы).
-
-Алгоритм работает с любыми конференциями — без хардкода названий.
-"""
-
 import re
-from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
-from models import Conference, ConferenceSeries
+from typing import Dict, List, Optional
+from models import Conference, ConferenceEdition, ConferenceSeries
 from normalizer import normalize
 
 
-# ── Расстояние Левенштейна ────────────────────────────────────────────────────
-
-def _levenshtein(a: str, b: str) -> int:
+def _levenshtein(a, b):
     if a == b: return 0
     if not a: return len(b)
     if not b: return len(a)
@@ -25,167 +12,124 @@ def _levenshtein(a: str, b: str) -> int:
     for ca in a:
         curr = [prev[0] + 1]
         for j, cb in enumerate(b):
-            curr.append(min(prev[j + 1] + 1, curr[j] + 1, prev[j] + (0 if ca == cb else 1)))
+            curr.append(min(prev[j+1]+1, curr[j]+1, prev[j]+(0 if ca==cb else 1)))
         prev = curr
     return prev[len(b)]
 
 
-def _similarity(a: str, b: str) -> float:
+def _similarity(a, b):
     ml = max(len(a), len(b))
-    if ml == 0: return 1.0
-    return 1.0 - _levenshtein(a, b) / ml
+    return 1.0 if ml == 0 else 1.0 - _levenshtein(a, b) / ml
 
 
-# ── Построение конференций из сырых данных ────────────────────────────────────
+_VRAMKAKH = re.compile(r'в\s+рамках', re.IGNORECASE)
 
-def build_conferences_from_raw(raw_list: list) -> List[Conference]:
-    """
-    Принимает список dict с полями conf_id и conf_name (формат API ИСАНД),
-    применяет нормализацию, возвращает список Conference.
 
-    Параметры
-    ----------
-    raw_list : list of dict
-        Каждый dict содержит:
-          - conf_id   : идентификатор в ИСАНД (int или str)
-          - conf_name : полное название конференции
+def _is_child(conf_name, key_type):
+    # Дочерняя конференция: «в рамках МКПУ» или «Мультиконф (МКПУ): подконф»
+    if _VRAMKAKH.search(conf_name): return True
+    if ':' in conf_name and key_type == 'abbr':
+        before = conf_name.split(':', 1)[0]
+        if re.search(r'\([А-ЯЁA-Z]{2,8}[,\s\)]', before): return True
+    return False
 
-    Возвращает
-    ----------
-    list of Conference
-    """
+
+def build_conferences_from_raw(raw_list):
     result = []
     for item in raw_list:
         raw_id   = item.get('conf_id') or item.get('conf_isand_id') or 0
         raw_name = item.get('conf_name') or ''
-        try:
-            conf_id = int(raw_id)
-        except (ValueError, TypeError):
-            conf_id = 0
-
+        try: conf_id = int(raw_id)
+        except: conf_id = 0
         norm = normalize(raw_name)
-        conf = Conference(
-            conf_id    = conf_id,
-            conf_name  = raw_name,
-            year       = norm['year'],
-            location   = norm['location'],
-            base_name  = norm['base_name'],
-            series_key = norm['series_key'],
-            key_type   = norm['key_type'],
-        )
-        result.append(conf)
+        # Год из CSV (_year_from_csv) приоритетнее года из названия
+        year = item.get('_year_from_csv') or norm['year']
+        result.append(Conference(
+            conf_id=conf_id, conf_name=raw_name,
+            year=year, location=norm['location'],
+            base_name=norm['base_name'],
+            series_key=norm['series_key'], key_type=norm['key_type'],
+        ))
     return result
 
 
-# ── Основная группировка ──────────────────────────────────────────────────────
-
-def group_conferences(
-    conferences: List[Conference],
-    fuzzy: bool = True,
-    fuzzy_threshold: float = 0.88,
-) -> Dict[str, ConferenceSeries]:
-    """
-    Группирует список конференций в серии по ключу series_key.
-
-    Логика:
-    - Ключи типа 'abbr' сравниваются ТОЧНО (аббревиатуры стандартизованы).
-    - Ключи типа 'title'/'name' при fuzzy=True сравниваются нечётко
-      (расстояние Левенштейна), что позволяет объединять варианты с
-      незначительными орфографическими различиями.
-
-    Параметры
-    ----------
-    conferences    : список Conference
-    fuzzy          : включить нечёткое сравнение для title/name ключей
-    fuzzy_threshold: порог схожести [0, 1] (по умолчанию 0.88)
-
-    Возвращает
-    ----------
-    dict: series_key -> ConferenceSeries
-    """
-    # Разделяем на abbr-ключи (точные) и title/name ключи (fuzzy)
-    abbr_map:  Dict[str, ConferenceSeries] = {}
-    fuzzy_map: Dict[str, ConferenceSeries] = {}  # для title/name
-
+def group_conferences(conferences, fuzzy=True, fuzzy_threshold=0.9):
+    independent, children = [], []
     for conf in conferences:
-        key   = conf.series_key
+        (children if _is_child(conf.conf_name, conf.key_type) else independent).append(conf)
+
+    abbr_map, fuzzy_map = {}, {}
+
+    for conf in independent:
+        key   = conf.series_key or f'[id:{conf.conf_id}]'
         ktype = conf.key_type
 
-        if not key:
-            key   = f'[без названия #{conf.conf_id}]'
-            ktype = 'name'
-
         if ktype == 'abbr':
-            # Точное совпадение
             if key not in abbr_map:
-                abbr_map[key] = ConferenceSeries(
-                    base_name  = key,
-                    key_type   = 'abbr',
-                )
-            abbr_map[key].editions.append(conf)
-
+                abbr_map[key] = ConferenceSeries(base_name=key, key_type='abbr', confidence='high')
+            abbr_map[key].editions.append(
+                ConferenceEdition(conf_id=conf.conf_id, conf_name=conf.conf_name,
+                                  year=conf.year, location=conf.location))
         else:
-            # Fuzzy-matching для title/name
+            best_key, best_sim = None, 0.0
             if fuzzy:
-                best_key = _find_fuzzy_key(key, fuzzy_map, fuzzy_threshold)
-            else:
-                best_key = key if key in fuzzy_map else None
-
+                for k in fuzzy_map:
+                    s = _similarity(key, k)
+                    if s >= fuzzy_threshold and s > best_sim:
+                        best_sim, best_key = s, k
             if best_key:
-                fuzzy_map[best_key].editions.append(conf)
+                series = fuzzy_map[best_key]
+                if best_sim < 1.0: series.confidence = 'low'
             else:
-                fuzzy_map[key] = ConferenceSeries(
-                    base_name = key,
-                    key_type  = ktype,
-                )
-                fuzzy_map[key].editions.append(conf)
+                conf_level = 'medium' if ktype == 'title' else 'low'
+                fuzzy_map[key] = ConferenceSeries(base_name=key, key_type=ktype,
+                                                   confidence=conf_level)
+                series = fuzzy_map[key]
+            series.editions.append(
+                ConferenceEdition(conf_id=conf.conf_id, conf_name=conf.conf_name,
+                                  year=conf.year, location=conf.location))
 
-    # Объединяем результаты
-    result = {}
-    result.update(abbr_map)
-    result.update(fuzzy_map)
+    result = {**abbr_map, **fuzzy_map}
+
+    for child in children:
+        key = child.series_key
+        if key not in result:
+            result[key] = ConferenceSeries(
+                base_name=key, key_type=child.key_type,
+                confidence='high' if child.key_type == 'abbr' else 'medium')
+
+        series = result[key]
+        target = next((e for e in series.editions if e.year == child.year), None)
+        if target is None and series.editions:
+            target = series.editions[0]
+        if target is None:
+            target = ConferenceEdition(conf_id=0, conf_name=f'{key} (контейнер)',
+                                        year=child.year, location=child.location,
+                                        is_container=True)
+            series.editions.append(target)
+
+        target.is_container = True
+        target.children.append(Conference(
+            conf_id=child.conf_id, conf_name=child.conf_name,
+            year=child.year, location=child.location,
+            series_key=child.series_key, key_type=child.key_type))
+
     return result
 
 
-def _find_fuzzy_key(
-    key: str,
-    existing: Dict[str, ConferenceSeries],
-    threshold: float,
-) -> Optional[str]:
-    """Ищет похожий ключ среди уже существующих серий."""
-    best_key   = None
-    best_score = 0.0
+def _find_fuzzy_key(key, existing, threshold):
+    best_key, best_score = None, 0.0
     for k in existing:
         score = _similarity(key, k)
         if score >= threshold and score > best_score:
-            best_score = score
-            best_key   = k
+            best_score, best_key = score, k
     return best_key
 
 
-# ── Сортировка результатов ────────────────────────────────────────────────────
-
-def sort_series(
-    series_map: Dict[str, ConferenceSeries],
-    by: str = 'count',
-    reverse: bool = True,
-) -> List[ConferenceSeries]:
-    """
-    Сортирует серии конференций.
-
-    Параметры
-    ----------
-    by      : 'count' | 'name' | 'latest'
-    reverse : обратный порядок
-
-    Возвращает
-    ----------
-    list of ConferenceSeries
-    """
-    key_fns = {
+def sort_series(series_map, by='count', reverse=True):
+    fns = {
         'count':  lambda s: s.count,
         'name':   lambda s: s.base_name.lower(),
         'latest': lambda s: max(s.years) if s.years else 0,
     }
-    fn = key_fns.get(by, key_fns['count'])
-    return sorted(series_map.values(), key=fn, reverse=reverse)
+    return sorted(series_map.values(), key=fns.get(by, fns['count']), reverse=reverse)
