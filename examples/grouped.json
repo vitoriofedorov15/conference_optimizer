@@ -1,0 +1,75 @@
+{
+  "total_series": 3,
+  "series": [
+    {
+      "series_key": "ALC",
+      "key_type": "abbr",
+      "confidence": "high",
+      "editions_count": 2,
+      "year_range": "2023–2024",
+      "editions": [
+        {
+          "conf_id": 102,
+          "conf_name": "ALC-2024",
+          "year": 2024,
+          "location": null,
+          "is_container": true,
+          "children": [
+            {
+              "conf_id": 103,
+              "conf_name": "Мультиконференция (ALC): секция «Данные» 2024",
+              "year": 2024,
+              "location": null
+            }
+          ]
+        },
+        {
+          "conf_id": 101,
+          "conf_name": "ALC-2023",
+          "year": 2023,
+          "location": null,
+          "is_container": false
+        }
+      ]
+    },
+    {
+      "series_key": "QDS",
+      "key_type": "abbr",
+      "confidence": "high",
+      "editions_count": 2,
+      "year_range": "2023–2024",
+      "editions": [
+        {
+          "conf_id": 202,
+          "conf_name": "QDS'2024",
+          "year": 2024,
+          "location": null,
+          "is_container": false
+        },
+        {
+          "conf_id": 201,
+          "conf_name": "QDS 2023",
+          "year": 2023,
+          "location": null,
+          "is_container": false
+        }
+      ]
+    },
+    {
+      "series_key": "NEO",
+      "key_type": "abbr",
+      "confidence": "high",
+      "editions_count": 1,
+      "year_range": "2024",
+      "editions": [
+        {
+          "conf_id": 301,
+          "conf_name": "NEO-2024",
+          "year": 2024,
+          "location": null,
+          "is_container": false
+        }
+      ]
+    }
+  ]
+}
