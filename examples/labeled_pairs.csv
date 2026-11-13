@@ -1,0 +1,25 @@
+pair_id,left,right,expected_same_series,category,rationale
+P01,ALC-2023,ALC-2024,1,edition,Same invented acronym across years
+P02,"Конференция «Алгоритмы и данные» (ALC, Вена)",ALC-2024,1,format,Acronym in parentheses versus year prefix
+P03,QDS 2023,QDS'2024,1,format,Space versus apostrophe year separator
+P04,Конференция «Сетевые системы» (Вена),Российская конференция «Сетевые системы» (Москва),1,title,Identical title across locations and prefixes
+P05,Конференция «Аналитика платежей»,Конференция «Аналитика платежеи»,1,typo,Single character transcription error
+P06,Конференция «Качество данных»,Конференция «Качество даных»,1,typo,Missing character
+P07,Мультиконференция (ALC-2024),Мультиконференция (ALC-2024): секция «Данные»,1,nested,Same parent series; child retained as nested record
+P08,Мультиконференция (ALC-2024),"Секция (PAY), проводимая в рамках ALC",1,nested,Within-parent wording
+P09,ALC-2024,alc-2025,1,case,Lowercase acronym should denote the same invented series
+P10,Конференция «Обработка платежей»,Конференция «Платёжные вычисления»,1,rename,Invented renamed series; title-only evidence insufficient
+P11,Конференция «Качество данных»,Конференция «Качество даннх»,1,typo,Two-character corruption
+P12,Мультиконференция (ALC-2024): секция «Данные»,Мультиконференция (ALC-2025): секция «Аналитика»,1,nested,Different children within same parent series
+P13,ALC-2024,QDS-2024,0,different,Different acronyms
+P14,Конференция «Качество данных»,Конференция «Безопасность сетей»,0,different,Unrelated titles
+P15,Конференция «Аналитика платежей»,Конференция «Аналитика платежеек»,0,similar-title,Invented separate events with similar names
+P16,Конференция «Управление данными»,Конференция «Управление зданиями»,0,similar-title,Similar spelling but different subjects
+P17,Конференция «Алгоритмы обучения» (DATA),Конференция «Архивы истории» (DATA),0,acronym-collision,Invented unrelated series reuse an acronym
+P18,Конференция «Открытые данные» (Вена),Конференция «Открытые данные» (Москва),0,title-collision,Invented distinct organisers with generic identical titles
+P19,ALC-2024,Конференция «Алгоритмы» (ALCS),0,similar-acronym,One-letter acronym extension
+P20,Конференция «Сетевые системы»,Конференция «Сетевые сигналы»,0,similar-title,Different subjects
+P21,Мультиконференция (ALC): секция «Данные»,Мультиконференция (QDS): секция «Данные»,0,nested,Identical child title under distinct parents
+P22,Конференция «Платёжные сервисы»,Конференция «Платёжные сервисы плюс»,0,similar-title,Invented distinct event with extended title
+P23,QDS-2024,QDT-2024,0,similar-acronym,Similar but distinct acronyms
+P24,Конференция «Качество данных»,Конференция «Качество даннoх»,0,similar-title,Deliberately similar separate series
